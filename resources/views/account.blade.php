@@ -153,123 +153,196 @@
             let editingTask = null;
 
             function saveBoard() {
-                localStorage.setItem('trelloBoard', JSON.stringify(boardData));
+            localStorage.setItem('trelloBoard', JSON.stringify(boardData));
             }
 
             function createStage(stage, index) {
-                const stageId = `stage-${index}`;
-                const html = `
-                    <div class="card stage-card" data-stage-index="${index}">
-                        <div class="card-body">
-                            <h5 class="card-title d-flex justify-content-between align-items-center">
-                                <span class="stage-title">${stage.title}</span>
-                                <button class="btn btn-sm btn-outline-secondary addTaskBtn" data-stage="${index}">+</button>
-                            </h5>
-                            <div class="task-list connectedSortable" id="${stageId}"></div>
-                        </div>
-                    </div>`;
-                $('#board').append(html);
-                stage.tasks.forEach((task, taskIndex) => addTaskToDOM(index, task.subject, task.desc, taskIndex));
-                makeSortable();
+            const stageId = `stage-${index}`;
+            const html = `
+                <div class="card stage-card" data-stage-index="${index}">
+                <div class="card-body">
+                    <h5 class="card-title d-flex justify-content-between align-items-center">
+                    <input class="editable-title stage-title" value="${stage.title}" data-index="${index}" />
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary addTaskBtn" data-stage="${index}" title="Add Task"><i class="fas fa-plus"></i></button>
+                        <button class="delete-stage" data-stage-index="${index}" title="Delete Stage"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                    </h5>
+                    <div class="task-list connectedSortable" id="${stageId}"></div>
+                </div>
+                </div>`;
+            $('#board').append(html);
+            stage.tasks.forEach((task, taskIndex) => addTaskToDOM(index, task.subject, task.desc, taskIndex));
+            makeSortable();
             }
 
             function addTaskToDOM(stageIndex, subject, desc, taskIndex) {
-                const task = `<div class="task" data-stage-index="${stageIndex}" data-task-index="${taskIndex}">
-                    <div class="task-title">${subject}</div>
-                    <div class="text-muted">${desc}</div>
-                </div>`;
-                $(`#stage-${stageIndex}`).append(task);
+            const longClass = desc.length > 80 ? 'long' : '';
+            const task = `<div class="task ${longClass}" data-stage-index="${stageIndex}" data-task-index="${taskIndex}">
+                <div class="task-title">${subject}</div>
+                <div class="text-muted task-desc">${desc}</div>
+                <button class="delete-task" title="Delete Task" data-stage-index="${stageIndex}" data-task-index="${taskIndex}">
+                <i class="fas fa-times"></i>
+                </button>
+            </div>`;
+            $(`#stage-${stageIndex}`).append(task);
             }
 
-            function makeSortable() {
-                $(".connectedSortable").sortable({
-                    connectWith: ".connectedSortable",
-                    placeholder: "ui-state-highlight",
-                    stop: updateTaskOrder
-                }).disableSelection();
 
-                $("#board").sortable({
-                    items: ".stage-card",
-                    placeholder: "ui-state-highlight",
-                    stop: function () {
-                        const newOrder = [];
-                        $('.stage-card').each(function () {
-                            const index = $(this).data('stage-index');
-                            newOrder.push(boardData[index]);
-                        });
-                        boardData = newOrder;
-                        saveBoard();
-                        renderBoard();
-                    }
+            function makeSortable() {
+            $(".connectedSortable").sortable({
+                connectWith: ".connectedSortable",
+                placeholder: "ui-state-highlight",
+                stop: updateTaskOrder
+            }).disableSelection();
+
+            $("#board").sortable({
+                items: ".stage-card",
+                placeholder: "ui-state-highlight",
+                stop: function () {
+                const newOrder = [];
+                $('.stage-card').each(function () {
+                    const index = $(this).data('stage-index');
+                    newOrder.push(boardData[index]);
                 });
+                boardData = newOrder;
+                saveBoard();
+                renderBoard();
+                }
+            });
             }
 
             function updateTaskOrder() {
-                boardData.forEach((stage, i) => {
-                    const tasks = [];
-                    $(`#stage-${i} .task`).each(function () {
-                        const subject = $(this).find('.task-title').text();
-                        const desc = $(this).find('.text-muted').text();
-                        tasks.push({ subject, desc });
-                    });
-                    stage.tasks = tasks;
+            boardData.forEach((stage, i) => {
+                const tasks = [];
+                $(`#stage-${i} .task`).each(function () {
+                const subject = $(this).find('.task-title').text();
+                const desc = $(this).find('.text-muted').text();
+                tasks.push({ subject, desc });
                 });
-                saveBoard();
+                stage.tasks = tasks;
+            });
+            saveBoard();
             }
 
             function renderBoard() {
-                $('#board').empty();
-                boardData.forEach((stage, i) => createStage(stage, i));
+            $('#board').empty();
+            boardData.forEach((stage, i) => createStage(stage, i));
+            }
+
+            function autoExpandTextarea(el) {
+            el.style.height = 'auto';
+            el.style.height = (el.scrollHeight) + 'px';
             }
 
             $(document).ready(function () {
+            renderBoard();
+
+            $(document).on('input', 'textarea.auto-expand', function () {
+                autoExpandTextarea(this);
+            });
+
+            $('#addStageBtn').click(() => {
+                $('#stageTitle').val('');
+                new bootstrap.Modal('#stageModal').show();
+            });
+
+            $('#stageForm').submit(function (e) {
+                e.preventDefault();
+                const title = $('#stageTitle').val().trim();
+                if (title) {
+                boardData.push({ title, tasks: [] });
+                saveBoard();
                 renderBoard();
+                bootstrap.Modal.getInstance(document.getElementById('stageModal')).hide();
+                }
+            });
 
-                $('#addStageBtn').click(() => {
-                    const title = prompt('Enter Stage Title');
-                    if (title) {
-                        boardData.push({ title, tasks: [] });
-                        saveBoard();
-                        renderBoard();
-                    }
-                });
+            $(document).on('click', '.addTaskBtn', function () {
+                editingTask = null;
+                const stageIndex = $(this).data('stage');
+                $('#currentStageId').val(stageIndex);
+                $('#taskSubject').val('');
+                $('#taskDesc').val('').trigger('input');
+                
+                $('#taskForm').show();
+                $('#taskFormView').hide();
 
-                $(document).on('click', '.addTaskBtn', function () {
-                    editingTask = null;
-                    const stageIndex = $(this).data('stage');
-                    $('#currentStageId').val(stageIndex);
-                    $('#taskSubject').val('');
-                    $('#taskDesc').val('');
-                    new bootstrap.Modal('#taskModal').show();
-                });
+                $('#add_task').text('Save'); 
+ 
+                new bootstrap.Modal('#taskModal').show();
+            });
 
-                $(document).on('click', '.task', function () {
-                    const stageIndex = $(this).data('stage-index');
-                    const taskIndex = $(this).data('task-index');
-                    const task = boardData[stageIndex].tasks[taskIndex];
-                    editingTask = { stageIndex, taskIndex };
-                    $('#currentStageId').val(stageIndex);
-                    $('#taskSubject').val(task.subject);
-                    $('#taskDesc').val(task.desc);
-                    new bootstrap.Modal('#taskModal').show();
-                });
+            $(document).on('click', '#add_task', function (e) {
 
-                $('#taskForm').submit(function (e) {
-                    e.preventDefault();
-                    const subject = $('#taskSubject').val();
-                    const desc = $('#taskDesc').val();
-                    const stageIndex = +$('#currentStageId').val();
+            });
 
-                    if (editingTask) {
-                        boardData[editingTask.stageIndex].tasks[editingTask.taskIndex] = { subject, desc };
-                    } else {
-                        boardData[stageIndex].tasks.push({ subject, desc });
-                    }
+            $(document).on('click', '#edit_task', function (e) {
+                $('#taskForm').show();
+                $('#taskFormView').hide();
+                $('#add_task').text('Update'); 
+            });
 
-                    saveBoard();
-                    renderBoard();
-                    bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
-                });
+            $(document).on('click', '.task', function (e) {
+                if ($(e.target).closest('.delete-task').length) return;
+                const stageIndex = $(this).data('stage-index');
+                const taskIndex = $(this).data('task-index');
+                const task = boardData[stageIndex].tasks[taskIndex];
+                editingTask = { stageIndex, taskIndex };
+                $('#currentStageId').val(stageIndex);
+                $('#taskSubject').val(task.subject);
+                $('#taskDesc').val(task.desc).trigger('input');
+
+                $('#taskForm').hide();
+                $('#taskFormView').show();
+                $('#task_subject').html(task.subject);
+                $('#task_description').html('<p><small>' + task.desc.replace(/\n/g, '<br>') + '</small></p>');
+
+                new bootstrap.Modal('#taskModal').show();
+            });
+
+            $('#taskForm').submit(function (e) {
+                e.preventDefault();
+                const subject = $('#taskSubject').val();
+                const desc = $('#taskDesc').val();
+                const stageIndex = +$('#currentStageId').val();
+
+                if (editingTask) {
+                boardData[editingTask.stageIndex].tasks[editingTask.taskIndex] = { subject, desc };
+                } else {
+                boardData[stageIndex].tasks.push({ subject, desc });
+                }
+
+                saveBoard();
+                renderBoard();
+                bootstrap.Modal.getInstance(document.getElementById('taskModal')).hide();
+            });
+
+            $(document).on('click', '.delete-stage', function () {
+                const index = $(this).data('stage-index');
+                if (confirm('Are you sure you want to delete this stage and all its tasks?')) {
+                boardData.splice(index, 1);
+                saveBoard();
+                renderBoard();
+                }
+            });
+
+            $(document).on('click', '.delete-task', function (e) {
+                e.stopPropagation();
+                const stageIndex = $(this).data('stage-index');
+                const taskIndex = $(this).data('task-index');
+                if (confirm('Are you sure you want to delete this task?')) {
+                boardData[stageIndex].tasks.splice(taskIndex, 1);
+                saveBoard();
+                renderBoard();
+                }
+            });
+
+            $(document).on('input', '.stage-title', function () {
+                const index = $(this).data('index');
+                boardData[index].title = $(this).val();
+                saveBoard();
+            });
             });
             </script>
     </body>
